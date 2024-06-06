@@ -39,6 +39,7 @@ last_frame := 0.0
 
 // lighting
 lightPos :glm.vec3 = {1.2, 1.0, 2.0}
+lightColor :glm.vec3 = {0.0, 1.0, 1.0}
 
 
 main :: proc() {
@@ -485,7 +486,7 @@ rendering :: proc(shader, light_cube_shader: Shader, texture1, texture2, VAO, li
 	set_mat4(shader, "view", &view)
 	set_mat4(shader, "projection", &projection)
 	set_vec3(shader, "objectColor", &glm.vec3{1.0, 1.0, 1.0})
-	set_vec3(shader, "lightColor", &glm.vec3{1.0, 1.0, 1.0})
+	set_vec3(shader, "lightColor", &lightColor)
 	set_vec3(shader, "viewPos", &cam_pos)
 	set_vec3(shader, "lightPos", &lightPos)
 	
@@ -520,6 +521,7 @@ rendering :: proc(shader, light_cube_shader: Shader, texture1, texture2, VAO, li
 	lightCubeS := glm.mat4Scale(glm.vec3(0.2))
 	lightCubeModel : glm.mat4 = lightCubeT * lightCubeS
 	set_mat4(light_cube_shader, "model", &lightCubeModel)
+	set_vec3(light_cube_shader, "lightColor", &lightColor)
 
 	gl.BindVertexArray(lightCubeVAO)
 	gl.DrawArrays(gl.TRIANGLES, 0, 36)

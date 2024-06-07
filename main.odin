@@ -9,17 +9,20 @@ import gl "vendor:OpenGL"
 import "vendor:glfw"
 import "vendor:stb/image"
 import glm "core:math/linalg/glsl"
+import im "imgui"
+import "imgui_impl_glfw"
+import "imgui_impl_opengl3"
 
-PROGRAMNAME :: "Program"
+PROGRAMNAME :: "Engine?"
 GL_MAJOR_VERSION : c.int : 4
 GL_MINOR_VERSION :: 6
 
 // settings
-SCR_WIDTH :: 800
-SCR_HEIGHT :: 600
+SCR_WIDTH :: 1270
+SCR_HEIGHT :: 720
 
 // camera
-cam_pos   := glm.vec3{0.0, 0.0, 3.0}
+cam_pos   := glm.vec3{0.0, 0.0, 8.0}
 cam_front := glm.vec3{0.0, 0.0, -1.0}
 cam_up    := glm.vec3{0.0, 1.0, 0.0}
 cam_right := glm.vec3{1.0, 0.0, 0.0}
@@ -28,8 +31,8 @@ cam_right := glm.vec3{1.0, 0.0, 0.0}
 first_mouse := true
 yaw         :f32 = -90.0	// yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right so we initially rotate a bit to the left.
 pitch       :f32 =  0.0
-lastX       :f32 =  800.0 / 2.0
-lastY       :f32 =  600.0 / 2.0
+lastX       :f32 =  f32(SCR_WIDTH) / 2.0
+lastY       :f32 =  f32(SCR_HEIGHT)/ 2.0
 fov         :f32 =  45.0
 
 
@@ -38,14 +41,14 @@ delta_time := 0.0
 last_frame := 0.0
 
 // lighting
-lightPos :glm.vec3 = {1.2, 1.0, 2.0}
+lightPos :[3]f32 = {1.2, 1.0, 2.0}
 lightColor :glm.vec3 = {0.0, 1.0, 1.0}
+specularStrength : f32 = 0.5
+albedo_color : [3]f32 = {1.0, 1.0, 1.0}
+
 
 
 main :: proc() {
-	a := "lsdkjfskdj"
-
-	
 	if glfw.Init() == 0 {
 		fmt.println("Error trying to initialized GLFW.")
 		return
@@ -67,16 +70,37 @@ main :: proc() {
 
 	glfw.MakeContextCurrent(window)
 	glfw.SetFramebufferSizeCallback(window, size_callback)
-	glfw.SetCursorPosCallback(window, mouse_callback)
+	// glfw.SetCursorPosCallback(window, mouse_callback)
 	glfw.SetScrollCallback(window, scroll_callback)
 	gl.load_up_to(int(GL_MAJOR_VERSION), GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
 	// tell GLFW to capture our mouse
-    glfw.SetInputMode(window, glfw.CURSOR, 	glfw.CURSOR_DISABLED)
+    // glfw.SetInputMode(window, glfw.CURSOR, 	glfw.CURSOR_DISABLED)
 
 	// configure global opengl state
     // -----------------------------
-    gl.Enable(gl.DEPTH_TEST);
+    gl.Enable(gl.DEPTH_TEST)
+
+im.CHECKVERSION()
+	im.CreateContext()
+	defer im.DestroyContext()
+	io := im.GetIO()
+	io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad}
+	when im.IMGUI_BRANCH == "docking" {
+		io.ConfigFlags += {.DockingEnable}
+		io.ConfigFlags += {.ViewportsEnable}
+
+		style := im.GetStyle()
+		style.WindowRounding = 0
+		style.Colors[im.Col.WindowBg].w = 1
+	}
+
+	im.StyleColorsDark()
+
+	imgui_impl_glfw.InitForOpenGL(window, true)
+	defer imgui_impl_glfw.Shutdown()
+	imgui_impl_opengl3.Init("#version 150")
+	defer imgui_impl_opengl3.Shutdown()
 
 	// set up vertex data
 	shader := new_shader("shader.vs", "shader.fs")
@@ -261,6 +285,36 @@ main :: proc() {
 	// ------
 	for !glfw.WindowShouldClose(window) {
 
+		imgui_impl_glfw.NewFrame()
+		imgui_impl_opengl3.NewFrame()
+		im.NewFrame()
+
+		im.ShowDemoWindow()
+		if im.Begin("Window containing a quit button") {
+			if im.TreeNode("Light") {
+				tmpColor : [3]f32 = {lightColor[0], lightColor[1], lightColor[2]}
+				im.ColorEdit3("Color", &tmpColor)
+				lightColor = glm.vec3(tmpColor)
+				im.SliderFloat3("Position", &lightPos, -3.0, 3.0)
+				im.TreePop()
+				im.Spacing()
+			}
+
+			if im.TreeNode("Model") {
+				im.ColorEdit3("Color", &albedo_color)
+				im.SliderFloat("Specular Strength", &specularStrength, 0.0, 1.0)
+				im.TreePop()
+				im.Spacing()
+			}
+
+			if im.Button("The quit button in question") {
+				glfw.SetWindowShouldClose(window, true)
+			}
+		}
+		im.End()
+
+		im.Render()
+
 		current_frame := glfw.GetTime()
 		delta_time = current_frame - last_frame
 		last_frame = current_frame
@@ -334,6 +388,17 @@ main :: proc() {
 		/* gl.BindVertexArray(lightCubeVAO) */
 		/* gl.DrawArrays(gl.TRIANGLES, 0, 36) */
 
+
+		
+		imgui_impl_opengl3.RenderDrawData(im.GetDrawData())
+
+		when im.IMGUI_BRANCH == "docking" {
+			backup_current_window := glfw.GetCurrentContext()
+			im.UpdatePlatformWindows()
+			im.RenderPlatformWindowsDefault()
+			glfw.MakeContextCurrent(backup_current_window)
+		}
+
 		// check and call events and swap the buffers
 		glfw.SwapBuffers((window))
 		glfw.PollEvents()
@@ -404,7 +469,7 @@ size_callback :: proc "c" (window: glfw.WindowHandle, width, height: i32) {
 error_callback :: proc "c" (error: i32, description : cstring)
 {
 	context = runtime.default_context()
-	fmt.eprintf("Error: %s\n", description)
+	//fmt.eprintf("Error: %s\n", description)
 }
 
 mouse_callback :: proc "c" (window: glfw.WindowHandle, xpos, ypos: f64) {
@@ -485,10 +550,13 @@ rendering :: proc(shader, light_cube_shader: Shader, texture1, texture2, VAO, li
 
 	set_mat4(shader, "view", &view)
 	set_mat4(shader, "projection", &projection)
-	set_vec3(shader, "objectColor", &glm.vec3{1.0, 1.0, 1.0})
+	obj_color := glm.vec3(albedo_color)
+	set_vec3(shader, "objectColor", &obj_color)
+	set_float(shader, "specularStrength", specularStrength)
 	set_vec3(shader, "lightColor", &lightColor)
 	set_vec3(shader, "viewPos", &cam_pos)
-	set_vec3(shader, "lightPos", &lightPos)
+	p := glm.vec3(lightPos)
+	set_vec3(shader, "lightPos", &p)
 	
 	// render container
 	gl.BindVertexArray(VAO)
@@ -517,7 +585,7 @@ rendering :: proc(shader, light_cube_shader: Shader, texture1, texture2, VAO, li
 	set_mat4(light_cube_shader, "projection", &projection)
 	set_mat4(light_cube_shader, "view", &view)
 
-	lightCubeT := glm.mat4Translate(lightPos)
+	lightCubeT := glm.mat4Translate(glm.vec3(lightPos))
 	lightCubeS := glm.mat4Scale(glm.vec3(0.2))
 	lightCubeModel : glm.mat4 = lightCubeT * lightCubeS
 	set_mat4(light_cube_shader, "model", &lightCubeModel)

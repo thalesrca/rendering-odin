@@ -17,19 +17,52 @@ Color :: [Colors]glm.vec3 {
 		.White = {1.0, 1.0, 1.0},
 }
 
-Light :: struct {
+DirectionalLight :: struct {
+	using node: Node,
+	color: glm.vec3,
+	direction: glm.vec3,
+}
+
+new_directional_light :: proc(x: f32 = 0.0, y: f32 = 0.0, z: f32 = 0.0) -> DirectionalLight {
+	l: DirectionalLight
+	l.name = "DirectionalLight"
+	l.direction = glm.vec3{x, y, z}
+	l.color = Color[.White]
+	l.type = typeid_of(type_of(l))
+	return l
+}
+
+PointLight :: struct {
 	using node: Node,
 	color: glm.vec3,
 }
 
-new_light :: proc(x: f32 = 0.0, y: f32 = 0.0, z: f32 = 0.0) -> Light {
-	l: Light
-	l.name = "Light"
+new_point_light :: proc(x: f32 = 0.0, y: f32 = 0.0, z: f32 = 0.0) -> PointLight {
+	l: PointLight
+	l.name = "PointLight"
 	l.position = glm.vec3{x, y, z}
 	l.color = Color[.White]
 	l.type = typeid_of(type_of(l))
 	return l
 }
+
+SpotLight :: struct {
+	using node: Node,
+	direction: glm.vec3,
+	color: glm.vec3,
+	cutOff: f32,
+}
+
+new_spot_light :: proc(x: f32 = 0.0, y: f32 = 0.0, z: f32 = 0.0) -> SpotLight {
+	l: SpotLight
+	l.name = "SpotLight"
+	l.position = glm.vec3{x, y, z}
+	l.direction = glm.vec3{x, y, z}
+	l.color = Color[.White]
+	l.type = typeid_of(type_of(l))
+	return l
+}
+
 
 Camera :: struct {
 	using node: Node,

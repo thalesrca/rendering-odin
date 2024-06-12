@@ -92,13 +92,14 @@ set_mat4 :: proc(shader: Shader, location_name: cstring, value: ^glm.mat4) {
 	gl.UniformMatrix4fv(location, 1, gl.FALSE, &value[0,0])
 }
 
-set_vec3 :: proc(shader: Shader, location_name: cstring, value: ^glm.vec3) {
+set_vec3 :: proc(shader: Shader, location_name: cstring, value: glm.vec3) {
     // get the location to apply the "coordination matrix"
     // the location name needs to be the same uniform name as defined in the vertex shader
 	location : i32 = gl.GetUniformLocation(shader.program_id, location_name)
 
+	v := value
 	// associate the matrix using the location as a reference
-	gl.Uniform3fv(location, 1, &value[0])
+	gl.Uniform3fv(location, 1, &v[0])
 	//gl.UniformMatrix4fv(location, 1, gl.FALSE, &value[0,0])
 }
 

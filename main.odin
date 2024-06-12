@@ -45,19 +45,14 @@ delta_time := 0.0
 last_frame := 0.0
 
 // lighting
-//lightPos :[3]f32 = {1.2, 1.0, 2.0}
-//lightColor :glm.vec3 = {0.0, 1.0, 1.0}
+directional_light : DirectionalLight = new_directional_light(-0.2, -1.0, 0.3)
+point_light : PointLight = new_point_light(-0.2, -1.0, 0.3)
+spot_light : SpotLight = new_spot_light(-0.2, -1.0, 0.3)
 
-light := new_light(1.2, 1.0, 2.0)
-/* light_ambient  :glm.vec3= {0.2, 0.2, 0.2} */
-/* light_diffuse  :glm.vec3= {0.5, 0.5, 0.5} */
 light_specular :glm.vec3= {1.0, 1.0, 1.0}
-/* specularStrength : glm.vec3 = {0.5, 0.5, 0.5} */
 specularStrength : f32 = 0.5
 albedo_color : [3]f32 = {1.0, 0.5, 0.31}
 
-
-nodes : []^Node = {&light, &camera}
 
 main :: proc() {
 	if glfw.Init() == 0 {
@@ -65,7 +60,7 @@ main :: proc() {
 		return
 	}
 
-	glfw.SetErrorCallback(error_callback)
+	//glfw.SetErrorCallback(error_callback)
 	glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR,GL_MAJOR_VERSION) 
 	glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR,GL_MINOR_VERSION)
 	glfw.WindowHint(glfw.OPENGL_PROFILE,glfw.OPENGL_CORE_PROFILE)
@@ -118,8 +113,9 @@ main :: proc() {
 	
 
 	// set up vertex data
-	shader := new_shader("shaders/shader.vs", "shaders/shader.fs")
-	light_cube_shader := new_shader("shaders/light_cube.vs", "shaders/light_cube.fs")
+	cube_shader := new_shader("shaders/shader.vs", "shaders/shader.fs")
+	point_light_shader := new_shader("shaders/light_cube.vs", "shaders/light_cube.fs")
+	directional_light_shader := new_shader("shaders/light_cube.vs", "shaders/light_cube.fs")
 
 	vertices2 := [?]f32 {
 		// vertices       , normal,          text pos
@@ -180,10 +176,20 @@ main :: proc() {
 		glm.vec3{-1.3,  1.0, -1.5}
 	}
 
-	indices := [?]u32 {
-		0, 1, 3,
-		1, 2, 3
+	pointLightsPositions: [4]PointLight = {
+		new_point_light( 0.7,  0.2,  2.0),
+		new_point_light( 2.3,  -3.3, -4.0),
+		new_point_light(-2.0, -2.0, -8.0),
+		new_point_light(-0.0, 0.0, -3.0)
 	}
+
+	/* 	pointLightsPositions: [4]glm.vec3 = { */
+
+	/* 	glm.vec3{ 0.7,  0.2,  2.0}, */
+	/* 	glm.vec3{ 2.3,  -3.3, -4.0}, */
+	/* 	glm.vec3{-2.0, -2.0, -8.0}, */
+	/* 	glm.vec3{-0.0, 0.0, -3.0} */
+	/* } */
 
 
 	VBO, VBO2, VAO: u32
@@ -206,9 +212,9 @@ main :: proc() {
 	gl.EnableVertexAttribArray(2)
 
 	// -- LAMP --
-	lightCubeVAO: u32
-	gl.GenVertexArrays(1, &lightCubeVAO)
-	gl.BindVertexArray(lightCubeVAO)
+	pointLightVAO: u32
+	gl.GenVertexArrays(1, &pointLightVAO)
+	gl.BindVertexArray(pointLightVAO)
 
 	gl.BindBuffer(gl.ARRAY_BUFFER, VBO2)
 	gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices2), &vertices2, gl.STATIC_DRAW)
@@ -218,10 +224,12 @@ main :: proc() {
 
 
 	// load texture
-	texture1 : u32 = load_texture("assets/container2.png")
+	diff_texture : u32 = load_texture("assets/container2.png")
+	specular_texture : u32 = load_texture("assets/container2_specular.png")
 
-	use_shader(shader)
-	set_tex(shader, "material.diffuse", 0)
+	use_shader(cube_shader)
+	set_tex(cube_shader, "material.diffuse", 0)
+	set_tex(cube_shader, "material.specular", 1)
 	
 
 	// ----
@@ -238,14 +246,14 @@ main :: proc() {
 		last_frame = current_frame
 
 		// draw interface
-		interface(window)
+		interface(window, &pointLightsPositions)
 
 		// input
 		// -----
 		process_input(window)
 
 		// render
-		rendering(shader, light_cube_shader, texture1, VAO, lightCubeVAO, cubePositions)
+		rendering(cube_shader, directional_light_shader, point_light_shader, diff_texture, specular_texture, VAO, pointLightVAO, cubePositions, pointLightsPositions)
 
 		// check and call events and swap the buffers
 		glfw.SwapBuffers((window))
@@ -262,14 +270,278 @@ main :: proc() {
 	glfw.Terminate()
 }
 
-teste :: proc(m: glm.mat4, v: glm.vec3) -> glm.mat4 {
-	a: glm.mat4
-	a[0, 3] = m[0, 3] + v.x
-	a[1, 3] = m[0, 3] + v.y
-	a[2, 3] = m[0, 3] + v.z
-	//m[0, 3] += 1
-	return a
+
+rendering :: proc(cube_shader, directional_light_shader, point_light_shader: Shader, diff_texture, spec_texture, VAO, pointLightVAO: u32, cubePositions: [10]glm.vec3, pointLightsPositions: [4]PointLight) {
+	// render
+	gl.ClearColor(0.1, 0.1, 0.1, 1.0)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+	// ----------- cube shader config --------------
+	use_shader(cube_shader)
+	dir := glm.vec3(directional_light.direction)
+	set_vec3(cube_shader, "dirLight.direction", dir)
+	set_vec3(cube_shader, "dirLight.color", directional_light.color)
+	
+
+	set_vec3(cube_shader, "viewPos", camera.position)
+
+
+	// cube light properties
+	diffuse_light := directional_light.color * point_light.color * glm.vec3(0.5)
+	ambient_light := diffuse_light * glm.vec3(0.2)
+	p := glm.vec3(point_light.position)
+	set_vec3(cube_shader, "pointLight.position", p)
+
+	set_vec3(cube_shader, "pointLight.ambient", ambient_light)
+	set_vec3(cube_shader, "pointLight.diffuse", diffuse_light)
+	set_vec3(cube_shader, "pointLight.specular", light_specular)
+
+	set_float(cube_shader, "pointLight.constant", 1.0)
+	set_float(cube_shader, "pointLight.linear", 0.09)
+	set_float(cube_shader, "pointLight.quadratic", 0.032)
+	set_vec3(cube_shader, "pointLight.color", point_light.color)
+
+	//point light 1
+	pl := pointLightsPositions[0]
+	diffuse_light = directional_light.color * pl.color * glm.vec3(0.5)
+	ambient_light = diffuse_light * glm.vec3(0.2)
+    set_vec3(cube_shader, "pointLights[0].position", pl.position)
+	set_vec3(cube_shader, "pointLights[0].color", pl.color)
+    set_vec3(cube_shader, "pointLights[0].ambient", ambient_light)
+	set_vec3(cube_shader, "pointLights[0].diffuse", diffuse_light)
+    set_vec3(cube_shader, "pointLights[0].specular", glm.vec3{1.0, 1.0, 1.0})
+    set_float(cube_shader,"pointLights[0].constant", 1.0)
+    set_float(cube_shader,"pointLights[0].linear", 0.09)
+    set_float(cube_shader,"pointLights[0].quadratic", 0.032)
+    // point light 2
+	pl = pointLightsPositions[1]
+    set_vec3(cube_shader, "pointLights[1].position", pl.position)
+	set_vec3(cube_shader, "pointLights[1].color", pl.color)
+    set_vec3(cube_shader, "pointLights[1].ambient", glm.vec3{0.05, 0.05, 0.05})
+    set_vec3(cube_shader, "pointLights[1].diffuse", pl.color)
+	set_vec3(cube_shader, "pointLights[1].specular", glm.vec3{1.0, 1.0, 1.0})
+    set_float(cube_shader,"pointLights[1].constant", 1.0)
+    set_float(cube_shader,"pointLights[1].linear", 0.09)
+    set_float(cube_shader,"pointLights[1].quadratic", 0.032)
+	// point light 3
+	pl = pointLightsPositions[2]
+    set_vec3(cube_shader, "pointLights[2].position", pl.position)
+	set_vec3(cube_shader, "pointLights[2].color", pl.color)
+    set_vec3(cube_shader, "pointLights[2].ambient", glm.vec3{0.05, 0.05, 0.05})
+    set_vec3(cube_shader, "pointLights[2].diffuse", pl.color)
+	set_vec3(cube_shader, "pointLights[2].specular", glm.vec3{1.0, 1.0, 1.0})
+    set_float(cube_shader,"pointLights[2].constant", 1.0)
+    set_float(cube_shader,"pointLights[2].linear", 0.09)
+    set_float(cube_shader,"pointLights[2].quadratic", 0.032)
+
+	// point light 4
+	pl = pointLightsPositions[3]
+    set_vec3(cube_shader, "pointLights[3].position", pl.position)
+	set_vec3(cube_shader, "pointLights[3].color", pl.color)
+    set_vec3(cube_shader, "pointLights[3].ambient", glm.vec3{0.05, 0.05, 0.05})
+    set_vec3(cube_shader, "pointLights[3].diffuse", pl.color)
+	set_vec3(cube_shader, "pointLights[3].specular", glm.vec3{1.0, 1.0, 1.0})
+    set_float(cube_shader,"pointLights[3].constant", 1.0)
+    set_float(cube_shader,"pointLights[3].linear", 0.09)
+    set_float(cube_shader,"pointLights[3].quadratic", 0.032)
+
+
+	s_pos := glm.vec3(camera.position)
+	set_vec3(cube_shader, "spotLight.position", s_pos)
+	s_dir := glm.vec3(cam_front)
+	set_vec3(cube_shader, "spotLight.direction", s_dir)
+	set_float(cube_shader, "spotLight.cutOff", glm.cos(glm.radians_f32(12.5)))
+	set_float(cube_shader, "spotLight.outerCutOff", glm.cos(glm.radians_f32(17.5)))
+	set_float(cube_shader, "spotLight.constant", 1.0)
+	set_float(cube_shader, "spotLight.linear", 0.09)
+	set_float(cube_shader, "spotLight.quadratic", 0.032)
+	set_vec3(cube_shader, "spotLight.color", point_light.color)
+
+	// cube material properties
+	s := glm.vec3(specularStrength)
+	set_vec3(cube_shader, "material.specular", s)
+	set_float(cube_shader, "material.shininess", 32.0)
+
+	// view/projection transformationse
+	view := glm.mat4LookAt(camera.position, camera.position + cam_front, cam_up)
+	projection := glm.mat4Perspective(glm.radians_f32(camera.fov), SCR_WIDTH/SCR_HEIGHT, 0.1, 100.0) // we use the perspective projection (instead of orthogonal)
+	set_mat4(cube_shader, "view", &view)
+	set_mat4(cube_shader, "projection", &projection)
+	
+
+	// bind textures on corresponding texture units
+	gl.ActiveTexture(gl.TEXTURE0) // we want to configure the first (0) texture
+	gl.BindTexture(gl.TEXTURE_2D, diff_texture) // we say it is a texture 2d and pass the texture
+
+	gl.ActiveTexture(gl.TEXTURE1) // now we want to configure the second (1) texture
+	gl.BindTexture(gl.TEXTURE_2D, spec_texture)
+
+	
+	// render cubes
+	gl.BindVertexArray(VAO)
+	for i:= 0; i < 10; i+=1
+	{
+		// calculate the model matrix for each object and pass it to shader before drawing
+		position : glm.mat4 = glm.mat4Translate(cubePositions[i]);
+		angle : f32 = 20.0 * f32(i);
+		rotation : glm.mat4
+
+		if i == 0 || i == 2 || i == 5 || i == 8 {
+			rotation = glm.mat4Rotate(glm.vec3{1.0, 0.3, 0.5}, glm.radians_f32(angle) * f32(glfw.GetTime()));
+		} else {
+			rotation = glm.mat4Rotate(glm.vec3{1.0, 0.3, 0.5}, glm.radians_f32(angle));
+		}
+
+		model : glm.mat4 = position * rotation
+		set_mat4(cube_shader, "model", &model)
+
+		gl.DrawArrays(gl.TRIANGLES, 0, 36)
+	}
+
+
+	// directional light
+	use_shader(directional_light_shader)
+	set_mat4(directional_light_shader, "projection", &projection)
+	set_mat4(directional_light_shader, "view", &view)
+
+	dirLightT := glm.mat4Translate(glm.vec3(directional_light.position))
+	dirLightS := glm.mat4Scale(glm.vec3(0.2))
+	dirLightModel : glm.mat4 = dirLightT * dirLightS
+	set_mat4(directional_light_shader, "model", &dirLightModel)
+
+	/* use_shader(point_light_shader) */
+	/* set_mat4(point_light_shader, "projection", &projection) */
+	/* set_mat4(point_light_shader, "view", &view) */
+
+	// draw point lights
+	for i in 0..<4 {
+		pointLightT := glm.mat4Translate(glm.vec3(pointLightsPositions[i].position))
+		pointLightS := glm.mat4Scale(glm.vec3(0.2))
+		pointLightModel : glm.mat4 = pointLightT * pointLightS
+		set_mat4(point_light_shader, "model", &pointLightModel)
+		set_vec3(point_light_shader, "lightColor", pointLightsPositions[i].color)
+		
+		gl.BindVertexArray(pointLightVAO)
+		gl.DrawArrays(gl.TRIANGLES, 0, 36)
+	}
+
+
+	/* pointLightT := glm.mat4Translate(glm.vec3(point_light.position)) */
+	/* pointLightS := glm.mat4Scale(glm.vec3(0.2)) */
+	/* pointLightModel : glm.mat4 = pointLightT * pointLightS */
+	/* set_mat4(point_light_shader, "model", &pointLightModel) */
+	/* set_vec3(point_light_shader, "lightColor", point_light.color) */
+	
+	/* gl.BindVertexArray(pointLightVAO) */
+	/* gl.DrawArrays(gl.TRIANGLES, 0, 36) */
+
+
 }
+
+
+to_array :: proc(v: glm.vec3) -> [3]f32 {
+	return {v[0], v[1], v[2]}
+}
+
+
+interface :: proc(window: glfw.WindowHandle, pointLightsPositions: ^[4]PointLight) {
+	imgui_impl_glfw.NewFrame()
+	imgui_impl_opengl3.NewFrame()
+	imgui.NewFrame()
+
+	/* imgui.ShowDemoWindow() */
+	if imgui.Begin("Window") {
+		if imgui.TreeNode("Directional Light") {
+			dir := to_array(directional_light.direction)
+			imgui.SliderFloat3("Direction", &dir, -180, 180)
+			directional_light.direction = glm.vec3(dir)
+
+			pos := to_array(directional_light.position)
+			imgui.SliderFloat3("Position", &pos, -8.0, 8.0)
+			directional_light.position = glm.vec3(pos)
+
+			tmpColor : [3]f32 = {directional_light.color[0], directional_light.color[1], directional_light.color[2]}
+			imgui.ColorEdit3("Color", &tmpColor)
+			directional_light.color = glm.vec3(tmpColor)
+
+			imgui.TreePop()
+			imgui.Spacing()
+		}
+
+		for i in 0..<4 {
+			title := strings.unsafe_string_to_cstring(fmt.aprintf("Point Light %d", i))
+			if imgui.TreeNode(title) {
+				point_light := &pointLightsPositions[i]
+
+				pos := to_array(point_light.position)
+				imgui.SliderFloat3("Position", &pos, -8.0, 8.0)
+				point_light.position = glm.vec3(pos)
+
+				tmpColor : [3]f32 = {point_light.color[0], point_light.color[1], point_light.color[2]}
+				imgui.ColorEdit3("Color", &tmpColor)
+				point_light.color = glm.vec3(tmpColor)
+
+				imgui.TreePop()
+				imgui.Spacing()
+			}
+
+		}
+
+		/* if imgui.TreeNode("Single point light") { */
+		/* 	//point_light := &pointLightsPositions[i] */
+		/* 	/\* dir := to_array(point_light.direction) *\/ */
+		/* 	/\* imgui.SliderFloat3("Direction", &dir, -180, 180) *\/ */
+		/* 	/\* point_light.direction = glm.vec3(dir) *\/ */
+
+		/* 	pos := to_array(point_light.position) */
+		/* 	imgui.SliderFloat3("Position", &pos, -8.0, 8.0) */
+		/* 	point_light.position = glm.vec3(pos) */
+
+		/* 	tmpColor : [3]f32 = {point_light.color[0], point_light.color[1], point_light.color[2]} */
+		/* 	imgui.ColorEdit3("Color", &tmpColor) */
+		/* 	point_light.color = glm.vec3(tmpColor) */
+
+		/* 	imgui.TreePop() */
+		/* 	imgui.Spacing() */
+		/* } */
+
+
+		if imgui.TreeNode("Spot Light") {
+			/* dir := to_array(point_light.direction) */
+			/* imgui.SliderFloat3("Direction", &dir, -180, 180) */
+			/* point_light.direction = glm.vec3(dir) */
+
+			pos := to_array(spot_light.position)
+			imgui.SliderFloat3("Position", &pos, -8.0, 8.0)
+			spot_light.position = glm.vec3(pos)
+
+			tmpColor : [3]f32 = {spot_light.color[0], spot_light.color[1], spot_light.color[2]}
+			imgui.ColorEdit3("Color", &tmpColor)
+			spot_light.color = glm.vec3(tmpColor)
+
+			imgui.TreePop()
+			imgui.Spacing()
+		}
+							   
+
+		if imgui.Button("Quit") {
+			glfw.SetWindowShouldClose(window, true)
+		}
+	}
+	imgui.End()
+
+	imgui.Render()
+
+	imgui_impl_opengl3.RenderDrawData(imgui.GetDrawData())
+
+	when imgui.IMGUI_BRANCH == "docking" {
+		backup_current_window := glfw.GetCurrentContext()
+		imgui.UpdatePlatformWindows()
+		imgui.RenderPlatformWindowsDefault()
+		glfw.MakeContextCurrent(backup_current_window)
+	}
+}
+
 
 process_input :: proc(window: glfw.WindowHandle) {
 	if glfw.GetKey(window, glfw.KEY_ESCAPE) == glfw.PRESS {
@@ -312,12 +584,6 @@ process_input :: proc(window: glfw.WindowHandle) {
 
 size_callback :: proc "c" (window: glfw.WindowHandle, width, height: i32) {
 	gl.Viewport(0, 0, width, height)
-}
-
-error_callback :: proc "c" (error: i32, description : cstring)
-{
-	context = runtime.default_context()
-	//fmt.eprintf("Error: %s\n", description)
 }
 
 mouse_callback :: proc "c" (window: glfw.WindowHandle, xpos, ypos: f64) {
@@ -368,88 +634,6 @@ scroll_callback :: proc "c" (window: glfw.WindowHandle, xoffset, yoffset: f64) {
 	if (camera.fov > 45.0){
 		camera.fov = 45.0
 	}
-}
-
-
-rendering :: proc(shader, light_cube_shader: Shader, texture1, VAO, lightCubeVAO: u32, cubePositions: [10]glm.vec3) {
-	// render
-	gl.ClearColor(0.1, 0.1, 0.1, 1.0)
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-	use_shader(shader)
-	p := glm.vec3(light.position)
-	set_vec3(shader, "light.position", &p)
-	set_vec3(shader, "viewPos", &camera.position)
-
-	// light properties
-	diffuse_light := light.color * glm.vec3(0.5)
-	ambient_light := diffuse_light * glm.vec3(0.2)
-	set_vec3(shader, "light.ambient", &ambient_light)
-	set_vec3(shader, "light.diffuse", &diffuse_light)
-	set_vec3(shader, "light.specular", &light_specular)
-
-	// material properties
-	s := glm.vec3(specularStrength)
-	set_vec3(shader, "material.specular", &s)
-	set_float(shader, "material.shininess", 32.0)
-
-	// view/projection transformationse
-	view := glm.mat4LookAt(camera.position, camera.position + cam_front, cam_up)
-	projection := glm.mat4Perspective(glm.radians_f32(camera.fov), SCR_WIDTH/SCR_HEIGHT, 0.1, 100.0) // we use the perspective projection (instead of orthogonal)
-	set_mat4(shader, "view", &view)
-	set_mat4(shader, "projection", &projection)
-	
-
-	// bind textures on corresponding texture units
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, texture1)
-
-	
-	// obj_color := glm.vec3(albedo_color)
-	// set_vec3(shader, "material.ambient", &obj_color)
-	// set_float(shader, "material.diffuse", 0.0)
-
-	
-	// render container
-	gl.BindVertexArray(VAO)
-	for i:= 0; i < 10; i+=1
-	{
-		// calculate the model matrix for each object and pass it to shader before drawing
-		position : glm.mat4 = glm.mat4Translate(cubePositions[i]);
-		angle : f32 = 20.0 * f32(i);
-		rotation : glm.mat4
-
-		if i == 0 || i == 2 || i == 5 || i == 8 {
-			rotation = glm.mat4Rotate(glm.vec3{1.0, 0.3, 0.5}, glm.radians_f32(angle) * f32(glfw.GetTime()));
-		} else {
-			rotation = glm.mat4Rotate(glm.vec3{1.0, 0.3, 0.5}, glm.radians_f32(angle));
-		}
-
-		model : glm.mat4 = position * rotation
-		set_mat4(shader, "model", &model)
-
-		gl.DrawArrays(gl.TRIANGLES, 0, 36)
-	}
-
-
-	// lamp
-	use_shader(light_cube_shader)
-	set_mat4(light_cube_shader, "projection", &projection)
-	set_mat4(light_cube_shader, "view", &view)
-
-	lightCubeT := glm.mat4Translate(glm.vec3(light.position))
-	lightCubeS := glm.mat4Scale(glm.vec3(0.2))
-	lightCubeModel : glm.mat4 = lightCubeT * lightCubeS
-	set_mat4(light_cube_shader, "model", &lightCubeModel)
-	set_vec3(light_cube_shader, "lightColor", &light.color)
-
-	gl.BindVertexArray(lightCubeVAO)
-	gl.DrawArrays(gl.TRIANGLES, 0, 36)
-}
-
-
-to_array :: proc(v: glm.vec3) -> [3]f32 {
-	return {v[0], v[1], v[2]}
 }
 
 
@@ -504,61 +688,4 @@ load_texture :: proc(path: cstring) -> u32 {
     }
 
     return texture_id;
-}
-
-
-interface :: proc(window: glfw.WindowHandle) {
-	imgui_impl_glfw.NewFrame()
-	imgui_impl_opengl3.NewFrame()
-	imgui.NewFrame()
-
-	/* imgui.ShowDemoWindow() */
-	if imgui.Begin("Window") {
-		for node in nodes {
-			n : cstring = strings.unsafe_string_to_cstring(node.name)
-			if imgui.TreeNode(n) {
-				pos_range: f32
-				switch node.type {
-				case Light:
-					tmpColor : [3]f32 = {light.color[0], light.color[1], light.color[2]}
-					imgui.ColorEdit3("Color", &tmpColor)
-					light.color = glm.vec3(tmpColor)
-					pos_range = 5.0
-				case Camera:
-					imgui.DragFloat("Fov", &camera.fov, 1.0, 1.0, 120.0)
-					pos_range = 8.0
-				}
-
-				p := to_array(node.position)
-				imgui.SliderFloat3("Position", &p, -pos_range, pos_range)
-				node.position = glm.vec3(p)
-
-				imgui.TreePop()
-				imgui.Spacing()
-			}
-		}
-
-		if imgui.TreeNode("Model") {
-			imgui.ColorEdit3("Color", &albedo_color)
-			imgui.SliderFloat("Specular Strength", &specularStrength, 0.0, 1.0)
-			imgui.TreePop()
-			imgui.Spacing()
-		}
-
-		if imgui.Button("Quit") {
-			glfw.SetWindowShouldClose(window, true)
-		}
-	}
-	imgui.End()
-
-	imgui.Render()
-
-	imgui_impl_opengl3.RenderDrawData(imgui.GetDrawData())
-
-	when imgui.IMGUI_BRANCH == "docking" {
-		backup_current_window := glfw.GetCurrentContext()
-		imgui.UpdatePlatformWindows()
-		imgui.RenderPlatformWindowsDefault()
-		glfw.MakeContextCurrent(backup_current_window)
-	}
 }

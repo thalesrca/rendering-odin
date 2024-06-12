@@ -54,6 +54,9 @@ specularStrength : f32 = 0.5
 albedo_color : [3]f32 = {1.0, 0.5, 0.31}
 
 
+capture_mouse: bool = false
+
+
 main :: proc() {
 	if glfw.Init() == 0 {
 		fmt.println("Error trying to initialized GLFW.")
@@ -76,12 +79,10 @@ main :: proc() {
 
 	glfw.MakeContextCurrent(window)
 	glfw.SetFramebufferSizeCallback(window, size_callback)
-	// glfw.SetCursorPosCallback(window, mouse_callback)
+
 	glfw.SetScrollCallback(window, scroll_callback)
 	gl.load_up_to(int(GL_MAJOR_VERSION), GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
-	// tell GLFW to capture our mouse
-    // glfw.SetInputMode(window, glfw.CURSOR, 	glfw.CURSOR_DISABLED)
 
 	// configure global opengl state
     // -----------------------------
@@ -241,6 +242,17 @@ main :: proc() {
 	// render loop
 	// ------
 	for !glfw.WindowShouldClose(window) {
+
+
+		// use mouse
+		if capture_mouse {
+			glfw.SetCursorPosCallback(window, mouse_callback) // move mouse
+			glfw.SetInputMode(window, glfw.CURSOR, 	glfw.CURSOR_DISABLED) // hide mouse
+		} else {
+			glfw.SetCursorPosCallback(window, nil) // move mouse
+			glfw.SetInputMode(window, glfw.CURSOR, 	glfw.CURSOR_NORMAL) // hide mouse
+		}
+		
 		current_frame := glfw.GetTime()
 		delta_time = current_frame - last_frame
 		last_frame = current_frame
@@ -546,6 +558,10 @@ interface :: proc(window: glfw.WindowHandle, pointLightsPositions: ^[4]PointLigh
 process_input :: proc(window: glfw.WindowHandle) {
 	if glfw.GetKey(window, glfw.KEY_ESCAPE) == glfw.PRESS {
 		glfw.SetWindowShouldClose(window, true)
+	}
+
+	if glfw.GetKey(window, glfw.KEY_SPACE) == glfw.PRESS {
+		capture_mouse = !capture_mouse
 	}
 
 	// normal polygon

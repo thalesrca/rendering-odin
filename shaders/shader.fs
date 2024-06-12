@@ -78,7 +78,7 @@ vec3 CalculateDirLight(DirLight dirLight, vec3 normal, vec3 viewDir)
 
 
 // unreal, epsilon normally 0.01 (1 cm) - max distance = 5.0 for example
-float ComputeAttenuationU(float distance, float maxDistance) {
+float CalculateAttenuationU(float distance, float maxDistance) {
     float E = 0.1; // Example value, adjust as needed
     float initialIntensity = 1.0; // Example initial intensity
     float r0 = 1.0; // Example reference distance
@@ -133,7 +133,8 @@ vec3 CalculatePointLight(PointLight pointLight, vec3 normal, vec3 viewDir) {
 
 	// atenuation
 	float distance = length(pointLight.position - FragPos);
-	float attenuation = 1.0 / (pointLight.constant + pointLight.linear * distance + pointLight.quadratic * (distance * distance));
+	float attenuation = CalculateAttenuationU(distance, 5.0); 
+	  //1.0 / (pointLight.constant + pointLight.linear * distance + pointLight.quadratic * (distance * distance));
 
 	return (ambient + diffuse + specular) * attenuation;
 }
@@ -162,7 +163,9 @@ vec3 CalculateSpotLight(SpotLight spotLight, vec3 normal, vec3 viewDir) {
 
   // atenuation
   float distance = length(spotLight.position - FragPos);
-  float attenuation = 1.0 / (spotLight.constant + spotLight.linear * distance + spotLight.quadratic * (distance * distance));
+  float attenuation = CalculateAttenuationU(distance, 5.0);
+
+    // float attenuation = 1.0 / (spotLight.constant + spotLight.linear * distance + spotLight.quadratic * (distance * distance));
 
   return (ambient + diffuse + specular) * attenuation;
 	

@@ -108,6 +108,10 @@ set_tex :: proc(shader: Shader, location_name: cstring, pos: i32) {
 	gl.Uniform1i(gl.GetUniformLocation(shader.program_id, location_name), pos)
 }
 
+set_int :: proc(shader: Shader, location_name: cstring, pos: i32) {
+	gl.Uniform1i(gl.GetUniformLocation(shader.program_id, location_name), pos)
+}
+
 set_float :: proc(shader: Shader, location_name: cstring, value: f32) {
 	gl.Uniform1f(gl.GetUniformLocation(shader.program_id, location_name), value)
 //	gl.Uniform1i(gl.GetUniformLocation(shader.program_id, location_name), pos)

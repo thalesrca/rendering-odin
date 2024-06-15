@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:c"
 import "core:os"
 import "core:math"
-import "core:runtime"
+import "base:runtime"
 import gl "vendor:OpenGL"
 import "vendor:glfw"
 import stbi "vendor:stb/image"
@@ -14,6 +14,7 @@ import "imgui_impl_glfw"
 import "imgui_impl_opengl3"
 import "core:strings"
 import "core:reflect"
+
 
 PROGRAMNAME :: "Engine?"
 GL_MAJOR_VERSION : c.int : 4
@@ -58,13 +59,14 @@ capture_mouse: bool = false
 
 
 main :: proc() {
-	if glfw.Init() == 0 {
+
+	if !glfw.Init(){
 		fmt.println("Error trying to initialized GLFW.")
 		return
 	}
 
 	//glfw.SetErrorCallback(error_callback)
-	glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR,GL_MAJOR_VERSION) 
+	glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR,GL_MAJOR_VERSION)
 	glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR,GL_MINOR_VERSION)
 	glfw.WindowHint(glfw.OPENGL_PROFILE,glfw.OPENGL_CORE_PROFILE)
 
@@ -117,6 +119,14 @@ main :: proc() {
 	cube_shader := new_shader("shaders/shader.vs", "shaders/shader.fs")
 	point_light_shader := new_shader("shaders/light_cube.vs", "shaders/light_cube.fs")
 	directional_light_shader := new_shader("shaders/light_cube.vs", "shaders/light_cube.fs")
+
+	model_shader := new_shader("shaders/model.vs", "shaders/model.fs")
+
+	our_model := load_model("metal_barrel.gltf")
+
+	for m in our_model.meshes {
+		setup_mesh(m)
+	}
 
 	vertices2 := [?]f32 {
 		// vertices       , normal,          text pos
@@ -194,23 +204,24 @@ main :: proc() {
 
 
 	VBO, VBO2, VAO: u32
-	gl.GenVertexArrays(1, &VAO)
-	gl.GenBuffers(1, &VBO)
-	gl.GenBuffers(1, &VBO2)
-	
-	gl.BindBuffer(gl.ARRAY_BUFFER, VBO)
-	gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices2), &vertices2, gl.STATIC_DRAW)
 
-	gl.BindVertexArray(VAO)
-	// position attribute
-	gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(0))
-	gl.EnableVertexAttribArray(0)
-	// normal attribute
-	gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(3 * size_of(f32)))
-	gl.EnableVertexAttribArray(1)
-	// texture coord  attribute
-	gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(6 * size_of(f32)))
-	gl.EnableVertexAttribArray(2)
+	/* gl.GenVertexArrays(1, &VAO) */
+	/* gl.GenBuffers(1, &VBO) */
+	/* gl.GenBuffers(1, &VBO2) */
+	
+	/* gl.BindBuffer(gl.ARRAY_BUFFER, VBO) */
+	/* gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices2), &vertices2, gl.STATIC_DRAW) */
+
+	/* gl.BindVertexArray(VAO) */
+	/* // position attribute */
+	/* gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(0)) */
+	/* gl.EnableVertexAttribArray(0) */
+	/* // normal attribute */
+	/* gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(3 * size_of(f32))) */
+	/* gl.EnableVertexAttribArray(1) */
+	/* // texture coord  attribute */
+	/* gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * size_of(f32), uintptr(6 * size_of(f32))) */
+	/* gl.EnableVertexAttribArray(2) */
 
 	// -- LAMP --
 	pointLightVAO: u32
@@ -264,8 +275,32 @@ main :: proc() {
 		// -----
 		process_input(window)
 
+		gl.ClearColor(0.1, 0.1, 0.1, 1.0)
+		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+
+		// --- MODEL ---
+		use_shader(model_shader)
+		
+		projection := glm.mat4Perspective(glm.radians_f32(camera.fov), SCR_WIDTH/SCR_HEIGHT, 0.1, 100.0)
+		view := glm.mat4LookAt(camera.position, camera.position + cam_front, cam_up)
+
+		set_mat4(model_shader, "projection", &projection)
+		set_mat4(model_shader, "view", &view)
+
+		model_position : glm.mat4 = glm.mat4Translate(glm.vec3(0.0));
+		model_scale := glm.mat4Scale(glm.vec3(1.0))
+
+		model : glm.mat4 = model_position * model_scale
+		set_mat4(model_shader, "model", &model)
+
+		drawModel(our_model, &model_shader)
+
+		// ---------------
+
+
 		// render
-		rendering(cube_shader, directional_light_shader, point_light_shader, diff_texture, specular_texture, VAO, pointLightVAO, cubePositions, pointLightsPositions)
+		//rendering(cube_shader, directional_light_shader, point_light_shader, diff_texture, specular_texture, VAO, pointLightVAO, cubePositions, pointLightsPositions)
 
 		// check and call events and swap the buffers
 		glfw.SwapBuffers((window))
